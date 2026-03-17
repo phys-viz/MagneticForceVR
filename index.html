@@ -4,7 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Magnetic Force VR | AP Physics Lab</title>
-  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { background: #060c1a; overflow: hidden; font-family: 'Share Tech Mono', monospace; }
@@ -747,7 +748,7 @@ function fireDesktop() {
 function updateUI() {
   document.getElementById('b-val').textContent  = bMag.toFixed(1) + ' T';
   document.getElementById('b-dir').textContent  = B_PRESETS[bDirIdx].label;
-  document.getElementById('q-val').textContent  = `${chargeSign > 0 ? '+' : '−'}1 e`;
+
 
   const badge = document.getElementById('charge-badge');
   badge.textContent = chargeSign > 0 ? '+' : '−';
