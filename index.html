@@ -208,12 +208,13 @@ const arrowGroup = new THREE.Group();
 scene.add(arrowGroup);
 
 function arrowGridParams(mag) {
-  const s = Math.max(1.5, 3.8 - mag * 0.46);
+  // spacing: 2.5 at very low B, tightens to 1.5 at 5T
+  const s = Math.max(1.5, Math.min(2.5, 2.5 - (mag - 0.5) * 0.22));
   return {
     s,
-    nx: Math.max(2, Math.floor(13 / s)),
-    ny: Math.max(1, Math.floor( 6 / s)),
-    nz: Math.max(2, Math.floor(13 / s)),
+    nx: Math.max(4, Math.floor(13 / s)),
+    ny: Math.max(2, Math.floor( 6 / s)),
+    nz: Math.max(4, Math.floor(13 / s)),
   };
 }
 
@@ -274,6 +275,7 @@ function toggleCharge() {
   chargeSign = -chargeSign;
   updateHUD();
   updateGunLabel();
+  updateMuzzleCharge();
 }
 
 function toggleFieldMode() {
@@ -391,16 +393,19 @@ function snapLaunchDir(rawFwd) {
   const mag = B.length();
   if (mag < 0.01) { snapMode = 'free'; return rawFwd.clone(); }
 
-  const Bhat = B.clone().normalize();
-  const dot  = rawFwd.dot(Bhat);
-  const ang  = Math.acos(Math.min(1, Math.abs(dot))) / DEG; // 0–90°
+  const Bhat  = B.clone().normalize();
+  const absDot = Math.abs(rawFwd.dot(Bhat));  // 1 = parallel, 0 = perpendicular
 
-  if (ang < SNAP_DEG) {
+  if (absDot > 0.9) {
+    // Within ~26° of parallel
     snapMode = 'par';
+    const dot = rawFwd.dot(Bhat);
     return dot >= 0 ? Bhat.clone() : Bhat.clone().negate();
   }
-  if (ang > 90 - SNAP_DEG) {
+  if (absDot < 0.1) {
+    // Within ~6° of perpendicular
     snapMode = 'perp';
+    const dot = rawFwd.dot(Bhat);
     const proj = rawFwd.clone().addScaledVector(Bhat, -dot);
     return proj.lengthSq() > 1e-6 ? proj.normalize() : rawFwd.clone();
   }
@@ -440,18 +445,10 @@ function buildLauncher() {
   // Muzzle ring
   const ring = new THREE.Mesh(
     new THREE.TorusGeometry(0.022, 0.004, 6, 12),
-    new THREE.MeshStandardMaterial({ color: C.cyan, emissive: C.cyan, emissiveIntensity: 0.9 })
+    new THREE.MeshStandardMaterial({ color: 0x334455, emissive: 0x223344, emissiveIntensity: 0.4 })
   );
   ring.position.z = -0.22; ring.rotation.x = Math.PI / 2;
   g.add(ring);
-
-  // Muzzle bead
-  const bead = new THREE.Mesh(
-    new THREE.SphereGeometry(0.014),
-    new THREE.MeshBasicMaterial({ color: C.cyan })
-  );
-  bead.position.z = -0.24;
-  g.add(bead);
 
   // Snap indicator dot (cyan = perp, amber = par, dark = free)
   const snapDot = new THREE.Mesh(
@@ -565,6 +562,32 @@ function updateSnapLabel() {
 
 const launcher = buildLauncher();
 ctrl[0].add(launcher);
+
+// ── Muzzle charge indicator — shows next particle charge at gun tip ──
+const muzzleChargeMat = new THREE.MeshStandardMaterial({
+  color: C.red, emissive: C.red, emissiveIntensity: 1.4, roughness: 0,
+});
+const muzzleChargeMesh = new THREE.Mesh(
+  new THREE.SphereGeometry(0.022, 14, 10),
+  muzzleChargeMat
+);
+muzzleChargeMesh.position.set(0, 0, -0.26); // sits at barrel tip
+// Sign sprite inside muzzle charge ball
+const muzzleSprite = new THREE.Sprite(
+  new THREE.SpriteMaterial({ map: makeChargeSprite(1), transparent: true, depthTest: false })
+);
+muzzleSprite.scale.set(0.038, 0.038, 0.038);
+muzzleChargeMesh.add(muzzleSprite);
+ctrl[0].add(muzzleChargeMesh);
+
+function updateMuzzleCharge() {
+  const col = chargeSign > 0 ? C.red : C.blue;
+  muzzleChargeMat.color.setHex(col);
+  muzzleChargeMat.emissive.setHex(col);
+  muzzleSprite.material.map = makeChargeSprite(chargeSign);
+  muzzleSprite.material.needsUpdate = true;
+}
+updateMuzzleCharge();
 const handle = new THREE.Mesh(
   new THREE.CylinderGeometry(0.018, 0.025, 0.12, 8),
   new THREE.MeshStandardMaterial({ color: 0x0d1f2a, roughness: 0.4 })
@@ -766,17 +789,20 @@ renderer.setAnimationLoop(time => {
     }
     snapLabelSprite.visible = (snapMode !== 'free');
 
-    // Position labels to sides of right controller using its local X axis
+    // Position labels to sides of right controller using its local axes
     const ctrlWorldPos = new THREE.Vector3();
     ctrl[0].getWorldPosition(ctrlWorldPos);
-    const ctrlRight = new THREE.Vector3(1, 0, 0).applyQuaternion(ctrlQ);
-    // Gun readout: right side of gun
+    const ctrlRight = new THREE.Vector3( 1, 0, 0).applyQuaternion(ctrlQ);
+    const ctrlFwd   = new THREE.Vector3( 0, 0,-1).applyQuaternion(ctrlQ);
+    // Gun readout: right side, same forward depth as barrel
     gunLabelSprite.position.copy(ctrlWorldPos)
-      .addScaledVector(ctrlRight, 0.20)
+      .addScaledVector(ctrlRight,  0.20)
+      .addScaledVector(ctrlFwd,    0.10)
       .add(new THREE.Vector3(0, 0.04, 0));
-    // Snap label: left side of gun
+    // Snap label: left side, same forward depth
     snapLabelSprite.position.copy(ctrlWorldPos)
       .addScaledVector(ctrlRight, -0.26)
+      .addScaledVector(ctrlFwd,    0.10)
       .add(new THREE.Vector3(0, 0.04, 0));
     gunLabelSprite.visible = true;
   } else {
