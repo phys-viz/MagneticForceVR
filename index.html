@@ -599,7 +599,8 @@ ctrl[0].add(handle);
 ctrl[0].addEventListener('selectstart', () => {
   const pos = new THREE.Vector3();
   const q   = new THREE.Quaternion();
-  ctrl[0].getWorldPosition(pos);
+  // Fire from muzzle ball world position, not controller root
+  muzzleChargeMesh.getWorldPosition(pos);
   ctrl[0].getWorldQuaternion(q);
   fireFrom(pos, q);
 });
