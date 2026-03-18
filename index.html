@@ -289,8 +289,8 @@ function makeChargeSprite(sign) {
   const cnv = document.createElement('canvas');
   cnv.width = cnv.height = 64;
   const ctx = cnv.getContext('2d');
-  ctx.fillStyle = sign > 0 ? '#ff4455' : '#4488ff';
-  ctx.font = 'bold 52px monospace';
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 54px monospace';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText(sign > 0 ? '+' : '−', 32, 34);
   return new THREE.CanvasTexture(cnv);
@@ -306,15 +306,13 @@ function spawnParticle(pos, vel, sign) {
     new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 1.6, roughness: 0 })
   );
   mesh.position.copy(pos);
-  mesh.add(new THREE.Mesh(
-    new THREE.SphereGeometry(0.155, 8, 6),
-    new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.14 })
-  ));
+
+  // Sign sprite centered inside sphere (no halo, no offset)
   const sprite = new THREE.Sprite(
-    new THREE.SpriteMaterial({ map: makeChargeSprite(sign), transparent: true })
+    new THREE.SpriteMaterial({ map: makeChargeSprite(sign), transparent: true, depthTest: false })
   );
-  sprite.scale.set(0.22, 0.22, 0.22);
-  sprite.position.y = 0.24;
+  sprite.scale.set(0.13, 0.13, 0.13);
+  sprite.position.set(0, 0, 0);
   mesh.add(sprite);
   scene.add(mesh);
 
@@ -768,11 +766,18 @@ renderer.setAnimationLoop(time => {
     }
     snapLabelSprite.visible = (snapMode !== 'free');
 
-    // Position labels in world space above right controller
+    // Position labels to sides of right controller using its local X axis
     const ctrlWorldPos = new THREE.Vector3();
     ctrl[0].getWorldPosition(ctrlWorldPos);
-    gunLabelSprite.position.copy(ctrlWorldPos).add(new THREE.Vector3(0, 0.15, 0));
-    snapLabelSprite.position.copy(ctrlWorldPos).add(new THREE.Vector3(0, 0.26, 0));
+    const ctrlRight = new THREE.Vector3(1, 0, 0).applyQuaternion(ctrlQ);
+    // Gun readout: right side of gun
+    gunLabelSprite.position.copy(ctrlWorldPos)
+      .addScaledVector(ctrlRight, 0.20)
+      .add(new THREE.Vector3(0, 0.04, 0));
+    // Snap label: left side of gun
+    snapLabelSprite.position.copy(ctrlWorldPos)
+      .addScaledVector(ctrlRight, -0.26)
+      .add(new THREE.Vector3(0, 0.04, 0));
     gunLabelSprite.visible = true;
   } else {
     gunLabelSprite.visible = false;
