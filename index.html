@@ -269,7 +269,7 @@ function cycleMass() {
   updateMuzzleCharge();
 }
 
-
+function clearParticles() {
   for (const p of particles) disposeParticle(p);
   particles = [];
   updateHUD();
