@@ -618,12 +618,9 @@ const handle = new THREE.Mesh(
 handle.rotation.x = -Math.PI / 2;
 ctrl[0].add(handle);
 
-// ── Index trigger (selectstart) = FIRE or dismiss intro ──
+// ── Index trigger (selectstart) = FIRE or dismiss help ──
 ctrl[0].addEventListener('selectstart', () => {
-  if (helpVisible && helpIsIntro) {
-    hideHelp();
-    return;
-  }
+  if (helpVisible) { hideHelp(); return; }
   const pos = new THREE.Vector3();
   const q   = new THREE.Quaternion();
   muzzleChargeMesh.getWorldPosition(pos);
@@ -664,42 +661,40 @@ function drawHelpPanel(isIntro) {
   ctx.strokeStyle = '#062030'; ctx.lineWidth = 1;
   roundRect(ctx, 8, 8, W-16, H-16, 11); ctx.stroke();
 
-  // Title
-  ctx.font = 'bold 700 32px Rajdhani, monospace';
+  // Title only — no subtitle
+  ctx.font = 'bold 36px Rajdhani, monospace';
   ctx.fillStyle = '#00ffcc';
   ctx.textAlign = 'center';
-  ctx.fillText('MAGNETIC FORCE VR', W/2, 52);
-  ctx.font = '13px "Share Tech Mono", monospace';
-  ctx.fillStyle = '#1a3a4a';
-  ctx.fillText('AP PHYSICS C  ·  LORENTZ FORCE LAB', W/2, 74);
+  ctx.fillText('MAGNETIC FORCE VR', W/2, 54);
 
   // Divider
   ctx.strokeStyle = '#0a1e2e'; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(24, 88); ctx.lineTo(W-24, 88); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(24, 72); ctx.lineTo(W-24, 72); ctx.stroke();
 
-  // Controls table
+  // Controls table — arrows rendered large, other keys normal
   const rows = [
-    ['INDEX TRIGGER', 'fire particle',        '#00ffcc'],
-    ['JOY ↑ / ↓',    'B field  −5T → +5T',  '#ffaa00'],
-    ['JOY ← / →',    'speed  0 → 5 m/s',    '#ffaa00'],
-    ['THUMB CLICK',   'cycle mass  1 → 2',   '#aaddff'],
-    ['A BUTTON',      'toggle charge  + / −', '#ff4455'],
-    ['B BUTTON',      'rotate field 90°',     '#d0fff8'],
-    ['GRIP',          'show / hide help',     '#d0fff8'],
+    ['INDEX TRIGGER', 'fire particle',        '#00ffcc', false],
+    ['JOY ↑ / ↓',    'B field  −5T → +5T',  '#ffaa00', true ],
+    ['JOY ← / →',    'speed  0 → 5 m/s',    '#ffaa00', true ],
+    ['THUMB CLICK',   'cycle mass  1 → 2',   '#aaddff', false],
+    ['A BUTTON',      'toggle charge  + / −', '#ff4455', false],
+    ['B BUTTON',      'rotate field 90°',     '#d0fff8', false],
+    ['GRIP',          'show / hide help',     '#d0fff8', false],
   ];
 
   ctx.textAlign = 'left';
-  rows.forEach(([key, val, valCol], i) => {
-    const y = 120 + i * 46;
-    // Row bg on alternates
+  rows.forEach(([key, val, valCol, bigArrow], i) => {
+    const y = 104 + i * 48;
     if (i % 2 === 0) {
       ctx.fillStyle = 'rgba(0,255,204,0.03)';
-      ctx.fillRect(18, y - 22, W - 36, 40);
+      ctx.fillRect(18, y - 24, W - 36, 42);
     }
-    ctx.font = '700 18px "Share Tech Mono", monospace';
+    // Key label
+    ctx.font = `700 ${bigArrow ? 26 : 17}px "Share Tech Mono", monospace`;
     ctx.fillStyle = '#2a5a6a';
-    ctx.fillText(key, 32, y);
-    ctx.font = '18px "Share Tech Mono", monospace';
+    ctx.fillText(key, 32, y + (bigArrow ? 4 : 0));
+    // Value
+    ctx.font = '17px "Share Tech Mono", monospace';
     ctx.fillStyle = valCol;
     ctx.fillText(val, 280, y);
   });
@@ -790,19 +785,27 @@ function pollGamepad() {
     }
     joy.gripPrev = gripDown;
 
+    // ── Any other button press dismisses help ──
+    const anyOther =
+      (buttons[0] && buttons[0].pressed) || // index trigger
+      (buttons[3] && buttons[3].pressed) || // thumbstick click
+      (buttons[4] && buttons[4].pressed) || // A
+      (buttons[5] && buttons[5].pressed);   // B
+    if (anyOther && helpVisible) { hideHelp(); }
+
     // ── Thumbstick click (btn 3) → cycle mass ──
     const clickDown = buttons[3] && buttons[3].pressed;
-    if (clickDown && !joy.clickPrev) cycleMass();
+    if (clickDown && !joy.clickPrev && !helpVisible) cycleMass();
     joy.clickPrev = clickDown;
 
     // ── A button (btn 4) → toggle charge ──
     const aDown = buttons[4] && buttons[4].pressed;
-    if (aDown && !joy.aPrev) toggleCharge();
+    if (aDown && !joy.aPrev && !helpVisible) toggleCharge();
     joy.aPrev = aDown;
 
     // ── B button (btn 5) → rotate field 90° ──
     const bDown = buttons[5] && buttons[5].pressed;
-    if (bDown && !joy.bPrev) toggleFieldMode();
+    if (bDown && !joy.bPrev && !helpVisible) toggleFieldMode();
     joy.bPrev = bDown;
   }
 
