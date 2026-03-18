@@ -65,6 +65,7 @@
   <div class="row"><span class="lbl">B FIELD &nbsp;</span><span class="val-b"   id="b-out">0.0 T</span></div>
   <div class="row"><span class="lbl">AXIS &nbsp;&nbsp;&nbsp;</span><span class="val"    id="ax-out">+Z</span></div>
   <div class="row"><span class="lbl">SPEED &nbsp;&nbsp;</span><span class="val-spd" id="v-out">0.0 m/s</span></div>
+  <div class="row"><span class="lbl">MASS &nbsp;&nbsp;&nbsp;</span><span class="val"     id="m-out">1.0</span></div>
   <div class="row"><span class="lbl">CHARGE &nbsp;</span><span class="val-pos" id="q-out">+1e</span></div>
   <div class="row"><span class="lbl">SNAP &nbsp;&nbsp;&nbsp;</span><span class="val-snap-free" id="sn-out">FREE</span></div>
   <hr class="div">
@@ -101,7 +102,7 @@ window.onerror = (msg, src, line) => {
 // ═══════════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════════
-const MASS        = 1.0;
+const MASS_PRESETS = [1.0, 2.0];  // toggle between these two
 const CHARGE_MAG  = 1.0;
 const MAX_PART    = 25;
 const TRAIL_LEN   = 150;
@@ -121,14 +122,17 @@ const C = {
 // ═══════════════════════════════════════════════
 // SIM STATE
 // ═══════════════════════════════════════════════
-let bValue     = 0.0;   // −5 … +5 T  (sign = direction)
-let launchSpd  = 0.0;   //  0 … 5 m/s
-let fieldMode  = 'Z';   // 'Z' | 'Y'
-let chargeSign = 1;     // +1 | −1
+let bValue     = 0.0;
+let launchSpd  = 0.0;
+let fieldMode  = 'Z';
+let chargeSign = 1;
+let massIdx    = 1;        // index into MASS_PRESETS, default 1.0
 let snapMode   = 'free';
 let particles  = [];
 let xrSession  = null;
 let lastTime   = 0;
+
+function currentMass() { return MASS_PRESETS[massIdx]; }
 
 // Separate flick-neutral flags for Y and X axes
 const joy = {
@@ -258,7 +262,14 @@ rebuildArrows();
 // ═══════════════════════════════════════════════
 // STATE CHANGE HELPERS
 // ═══════════════════════════════════════════════
-function clearParticles() {
+function cycleMass() {
+  massIdx = (massIdx + 1) % MASS_PRESETS.length;
+  updateHUD();
+  updateGunLabel();
+  updateMuzzleCharge();
+}
+
+
   for (const p of particles) disposeParticle(p);
   particles = [];
   updateHUD();
@@ -307,20 +318,22 @@ function makeChargeSprite(sign) {
 function spawnParticle(pos, vel, sign) {
   if (particles.length >= MAX_PART) disposeParticle(particles.shift());
 
-  const col = sign > 0 ? C.red : C.blue;
+  const mass   = currentMass();
+  const col    = sign > 0 ? C.red : C.blue;
+  const radius = 0.050 * Math.sqrt(mass);   // m=1 → 0.050, m=2 → 0.071
+  const trailOpacity = mass > 1 ? 0.70 : 0.45;
 
   const mesh = new THREE.Mesh(
-    new THREE.SphereGeometry(0.075, 16, 10),
+    new THREE.SphereGeometry(radius, 16, 10),
     new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 1.6, roughness: 0 })
   );
   mesh.position.copy(pos);
 
-  // Sign sprite centered inside sphere (no halo, no offset)
+  // Sign sprite scaled to sphere size
   const sprite = new THREE.Sprite(
     new THREE.SpriteMaterial({ map: makeChargeSprite(sign), transparent: true, depthTest: false })
   );
-  sprite.scale.set(0.13, 0.13, 0.13);
-  sprite.position.set(0, 0, 0);
+  sprite.scale.setScalar(radius * 2.4);
   mesh.add(sprite);
   scene.add(mesh);
 
@@ -329,7 +342,7 @@ function spawnParticle(pos, vel, sign) {
   trailGeo.setDrawRange(0, 0);
   const trail = new THREE.Line(
     trailGeo,
-    new THREE.LineBasicMaterial({ color: col, transparent: true, opacity: 0.45 })
+    new THREE.LineBasicMaterial({ color: col, transparent: true, opacity: trailOpacity })
   );
   scene.add(trail);
 
@@ -343,7 +356,7 @@ function spawnParticle(pos, vel, sign) {
   particles.push({
     mesh, trail, trailGeo, forceArrow,
     pos: pos.clone(), vel: vel.clone(),
-    sign, age: 0, history: [],
+    sign, mass: currentMass(), age: 0, history: [],
   });
   updateHUD();
 }
@@ -351,7 +364,7 @@ function spawnParticle(pos, vel, sign) {
 function stepParticle(p, dt) {
   const B   = getB();
   const vxB = new THREE.Vector3().crossVectors(p.vel, B);
-  vxB.multiplyScalar(p.sign * CHARGE_MAG / MASS);
+  vxB.multiplyScalar(p.sign * CHARGE_MAG / p.mass);
   p.vel.addScaledVector(vxB, dt);
   p.pos.addScaledVector(p.vel, dt);
   p.mesh.position.copy(p.pos);
@@ -505,9 +518,11 @@ function updateGunLabel() {
   ctx.font = '500 22px "Share Tech Mono", monospace';
   const bSign = bValue >= 0 ? '+' : '−';
   ctx.fillStyle = '#ffaa00';
-  ctx.fillText(`B  ${bSign}${Math.abs(bValue).toFixed(1)} T`, 14, 34);
+  ctx.fillText(`B  ${bSign}${Math.abs(bValue).toFixed(1)} T`, 14, 30);
   ctx.fillStyle = '#00ffcc';
-  ctx.fillText(`v  ${launchSpd.toFixed(1)} m/s`, 14, 62);
+  ctx.fillText(`v  ${launchSpd.toFixed(1)} m/s`, 14, 54);
+  ctx.fillStyle = '#aaddff';
+  ctx.fillText(`m  ${currentMass().toFixed(1)}`, 14, 78);
 
   // charge dot
   ctx.fillStyle = chargeSign > 0 ? '#ff4455' : '#4488ff';
@@ -587,9 +602,11 @@ muzzleChargeMesh.add(muzzleSprite);
 ctrl[0].add(muzzleChargeMesh);
 
 function updateMuzzleCharge() {
-  const col = chargeSign > 0 ? C.red : C.blue;
+  const col    = chargeSign > 0 ? C.red : C.blue;
+  const radius = 0.050 * Math.sqrt(currentMass());
   muzzleChargeMat.color.setHex(col);
   muzzleChargeMat.emissive.setHex(col);
+  muzzleChargeMesh.scale.setScalar(radius / 0.022); // normalize to base geometry
   muzzleSprite.material.map = makeChargeSprite(chargeSign);
   muzzleSprite.material.needsUpdate = true;
 }
@@ -642,6 +659,11 @@ function pollGamepad() {
     } else if (Math.abs(jx) < FLICK_LO) {
       joy.xNeutral = true;
     }
+
+    // ── Thumbstick click (btn 3) → cycle mass ──
+    const clickDown = buttons[3] && buttons[3].pressed;
+    if (clickDown && !joy.clickPrev) cycleMass();
+    joy.clickPrev = clickDown;
 
     // ── A button (btn 4) → toggle charge ──
     const aDown = buttons[4] && buttons[4].pressed;
@@ -730,8 +752,9 @@ window.addEventListener('keydown', e => {
     case 'ArrowDown':  changeB(-0.5);     break;
     case 'ArrowRight': changeSpeed(+0.5); break;
     case 'ArrowLeft':  changeSpeed(-0.5); break;
-    case 'a': case 'A': toggleCharge();    break;
+    case 'a': case 'A': toggleCharge();  break;
     case 'b': case 'B': toggleFieldMode(); break;
+    case 'm': case 'M': cycleMass();     break;
     case ' ':
       e.preventDefault();
       const muzzle = camera.position.clone().addScaledVector(
@@ -751,6 +774,7 @@ function updateHUD() {
   const axis = fieldMode === 'Z' ? (bValue >= 0 ? '+Z' : '−Z') : (bValue >= 0 ? '+Y' : '−Y');
   document.getElementById('ax-out').textContent = axis;
   document.getElementById('v-out').textContent  = `${launchSpd.toFixed(1)} m/s`;
+  document.getElementById('m-out').textContent  = `${currentMass().toFixed(1)}`;
 
   const qEl = document.getElementById('q-out');
   qEl.textContent = chargeSign > 0 ? '+1e' : '−1e';
