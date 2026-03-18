@@ -631,10 +631,6 @@ ctrl[0].addEventListener('selectstart', () => {
   fireFrom(pos, q);
 });
 
-// ── Grip (squeezestart) = toggle help ──
-ctrl[0].addEventListener('squeezestart', () => {
-  if (helpVisible) hideHelp(); else showHelp(false);
-});
 
 // ═══════════════════════════════════════════════
 // HELP / INTRO PANEL
@@ -732,13 +728,21 @@ function showHelp(isIntro) {
   helpVisible = true;
   drawHelpPanel(isIntro);
   helpMesh.visible = true;
-  // Position 1.4m in front of camera at eye level
-  const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-  fwd.y = 0; fwd.normalize();
-  helpMesh.position.copy(camera.position)
-    .addScaledVector(fwd, 1.4)
-    .setY(camera.position.y);
-  helpMesh.lookAt(camera.position);
+
+  // In XR, camera.matrixWorld contains the real head pose
+  const headPos = new THREE.Vector3();
+  const headQuat = new THREE.Quaternion();
+  camera.matrixWorld.decompose(headPos, headQuat, new THREE.Vector3());
+
+  // Place panel 1.4m ahead of head, at head height, facing the user
+  const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(headQuat);
+  fwd.y = 0;
+  if (fwd.lengthSq() < 0.001) fwd.set(0, 0, -1); // fallback if looking straight up/down
+  fwd.normalize();
+
+  helpMesh.position.copy(headPos).addScaledVector(fwd, 1.4);
+  helpMesh.position.y = headPos.y; // keep at eye level
+  helpMesh.lookAt(headPos);
 }
 
 function hideHelp() {
