@@ -137,7 +137,7 @@ function currentMass() { return MASS_PRESETS[massIdx]; }
 // Separate flick-neutral flags for Y and X axes
 const joy = {
   yNeutral: true, xNeutral: true,
-  aPrev: false, bPrev: false, clickPrev: false,
+  aPrev: false, bPrev: false, clickPrev: false, gripPrev: false,
 };
 
 function getB() {
@@ -618,15 +618,134 @@ const handle = new THREE.Mesh(
 handle.rotation.x = -Math.PI / 2;
 ctrl[0].add(handle);
 
-// ── Index trigger (selectstart) = FIRE ──
+// ── Index trigger (selectstart) = FIRE or dismiss intro ──
 ctrl[0].addEventListener('selectstart', () => {
+  if (helpVisible && helpIsIntro) {
+    hideHelp();
+    return;
+  }
   const pos = new THREE.Vector3();
   const q   = new THREE.Quaternion();
-  // Fire from muzzle ball world position, not controller root
   muzzleChargeMesh.getWorldPosition(pos);
   ctrl[0].getWorldQuaternion(q);
   fireFrom(pos, q);
 });
+
+// ── Grip (squeezestart) = toggle help ──
+ctrl[0].addEventListener('squeezestart', () => {
+  if (helpVisible) hideHelp(); else showHelp(false);
+});
+
+// ═══════════════════════════════════════════════
+// HELP / INTRO PANEL
+// ═══════════════════════════════════════════════
+let helpVisible = false;
+let helpIsIntro = false; // true on first show, suppresses firing
+
+const helpCanvas = document.createElement('canvas');
+helpCanvas.width = 640; helpCanvas.height = 480;
+const helpCtx = helpCanvas.getContext('2d');
+const helpTex = new THREE.CanvasTexture(helpCanvas);
+const helpMesh = new THREE.Mesh(
+  new THREE.PlaneGeometry(0.9, 0.675),
+  new THREE.MeshBasicMaterial({ map: helpTex, transparent: true, side: THREE.DoubleSide, depthTest: false })
+);
+helpMesh.visible = false;
+scene.add(helpMesh);
+
+function drawHelpPanel(isIntro) {
+  const ctx = helpCtx;
+  const W = helpCanvas.width, H = helpCanvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  // Background
+  ctx.fillStyle = 'rgba(3, 8, 20, 0.96)';
+  roundRect(ctx, 0, 0, W, H, 16); ctx.fill();
+
+  // Outer border
+  ctx.strokeStyle = '#00ffcc'; ctx.lineWidth = 2;
+  roundRect(ctx, 2, 2, W-4, H-4, 15); ctx.stroke();
+  ctx.strokeStyle = '#062030'; ctx.lineWidth = 1;
+  roundRect(ctx, 8, 8, W-16, H-16, 11); ctx.stroke();
+
+  // Title
+  ctx.font = 'bold 700 32px Rajdhani, monospace';
+  ctx.fillStyle = '#00ffcc';
+  ctx.textAlign = 'center';
+  ctx.fillText('MAGNETIC FORCE VR', W/2, 52);
+  ctx.font = '13px "Share Tech Mono", monospace';
+  ctx.fillStyle = '#1a3a4a';
+  ctx.fillText('AP PHYSICS C  ·  LORENTZ FORCE LAB', W/2, 74);
+
+  // Divider
+  ctx.strokeStyle = '#0a1e2e'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(24, 88); ctx.lineTo(W-24, 88); ctx.stroke();
+
+  // Controls table
+  const rows = [
+    ['INDEX TRIGGER', 'fire particle',        '#00ffcc'],
+    ['JOY ↑ / ↓',    'B field  −5T → +5T',  '#ffaa00'],
+    ['JOY ← / →',    'speed  0 → 5 m/s',    '#ffaa00'],
+    ['THUMB CLICK',   'cycle mass  1 → 2',   '#aaddff'],
+    ['A BUTTON',      'toggle charge  + / −', '#ff4455'],
+    ['B BUTTON',      'rotate field 90°',     '#d0fff8'],
+    ['GRIP',          'show / hide help',     '#d0fff8'],
+  ];
+
+  ctx.textAlign = 'left';
+  rows.forEach(([key, val, valCol], i) => {
+    const y = 120 + i * 46;
+    // Row bg on alternates
+    if (i % 2 === 0) {
+      ctx.fillStyle = 'rgba(0,255,204,0.03)';
+      ctx.fillRect(18, y - 22, W - 36, 40);
+    }
+    ctx.font = '700 18px "Share Tech Mono", monospace';
+    ctx.fillStyle = '#2a5a6a';
+    ctx.fillText(key, 32, y);
+    ctx.font = '18px "Share Tech Mono", monospace';
+    ctx.fillStyle = valCol;
+    ctx.fillText(val, 280, y);
+  });
+
+  // Divider before footer
+  ctx.strokeStyle = '#0a1e2e'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(24, H - 52); ctx.lineTo(W-24, H - 52); ctx.stroke();
+
+  // Footer
+  ctx.textAlign = 'center';
+  if (isIntro) {
+    ctx.font = 'bold 20px "Share Tech Mono", monospace';
+    ctx.fillStyle = '#00ffcc';
+    ctx.fillText('PULL TRIGGER TO BEGIN', W/2, H - 22);
+  } else {
+    ctx.font = '16px "Share Tech Mono", monospace';
+    ctx.fillStyle = '#1a3a4a';
+    ctx.fillText('GRIP TO CLOSE', W/2, H - 22);
+  }
+
+  helpTex.needsUpdate = true;
+}
+
+function showHelp(isIntro) {
+  helpIsIntro = isIntro;
+  helpVisible = true;
+  drawHelpPanel(isIntro);
+  helpMesh.visible = true;
+  // Position 1.4m in front of camera at eye level
+  const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+  fwd.y = 0; fwd.normalize();
+  helpMesh.position.copy(camera.position)
+    .addScaledVector(fwd, 1.4)
+    .setY(camera.position.y);
+  helpMesh.lookAt(camera.position);
+}
+
+function hideHelp() {
+  helpVisible = false;
+  helpIsIntro = false;
+  helpMesh.visible = false;
+}
 
 // ── Poll right gamepad ──
 function pollGamepad() {
@@ -660,6 +779,13 @@ function pollGamepad() {
       joy.xNeutral = true;
     }
 
+    // ── Grip button (btn 1) → toggle help ──
+    const gripDown = buttons[1] && buttons[1].pressed;
+    if (gripDown && !joy.gripPrev) {
+      if (helpVisible) hideHelp(); else showHelp(false);
+    }
+    joy.gripPrev = gripDown;
+
     // ── Thumbstick click (btn 3) → cycle mass ──
     const clickDown = buttons[3] && buttons[3].pressed;
     if (clickDown && !joy.clickPrev) cycleMass();
@@ -690,10 +816,13 @@ function pollGamepad() {
 renderer.xr.addEventListener('sessionstart', () => {
   document.getElementById('hud').style.display      = 'none';
   document.getElementById('ctrl-card').style.display = 'none';
+  // Show intro on first entry — slight delay so camera pose is settled
+  setTimeout(() => showHelp(true), 600);
 });
 renderer.xr.addEventListener('sessionend', () => {
   document.getElementById('hud').style.display      = '';
   document.getElementById('ctrl-card').style.display = '';
+  hideHelp();
 });
 
 // ═══════════════════════════════════════════════
