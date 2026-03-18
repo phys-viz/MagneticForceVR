@@ -87,7 +87,16 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
-'use strict';
+// Visible error reporter — shows any crash on screen
+window.onerror = (msg, src, line) => {
+  const d = document.createElement('div');
+  d.style.cssText = 'position:fixed;top:0;left:0;width:100%;background:#ff0033;color:#fff;font:13px monospace;padding:8px 12px;z-index:9999;';
+  d.textContent = `JS ERROR line ${line}: ${msg}`;
+  document.body.appendChild(d);
+  const btn = document.getElementById('vr-btn');
+  if (btn) { btn.textContent = 'SCRIPT ERROR — SEE TOP'; btn.disabled = true; }
+};
+
 
 // ═══════════════════════════════════════════════
 // CONSTANTS
@@ -457,13 +466,12 @@ function buildLauncher() {
 
 const launcher = buildLauncher();
 ctrl[0].add(launcher);
-ctrl[0].add(Object.assign(
-  new THREE.Mesh(
-    new THREE.CylinderGeometry(0.018, 0.025, 0.12, 8),
-    new THREE.MeshStandardMaterial({ color: 0x0d1f2a, roughness: 0.4 })
-  ),
-  { rotation: { x: -Math.PI / 2, y: 0, z: 0 } }
-));
+const handle = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.018, 0.025, 0.12, 8),
+  new THREE.MeshStandardMaterial({ color: 0x0d1f2a, roughness: 0.4 })
+);
+handle.rotation.x = -Math.PI / 2;
+ctrl[0].add(handle);
 
 // ── Index trigger (selectstart) = FIRE ──
 ctrl[0].addEventListener('selectstart', () => {
