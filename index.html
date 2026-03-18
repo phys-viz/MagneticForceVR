@@ -258,10 +258,16 @@ rebuildArrows();
 // ═══════════════════════════════════════════════
 // STATE CHANGE HELPERS
 // ═══════════════════════════════════════════════
+function clearParticles() {
+  for (const p of particles) disposeParticle(p);
+  particles = [];
+  updateHUD();
+}
+
 function changeB(delta) {
   bValue = parseFloat(Math.max(-5, Math.min(5, bValue + delta)).toFixed(2));
   rebuildArrows();
-  updateHUD();
+  clearParticles();
   updateGunLabel();
 }
 
@@ -281,7 +287,7 @@ function toggleCharge() {
 function toggleFieldMode() {
   fieldMode = fieldMode === 'Z' ? 'Y' : 'Z';
   rebuildArrows();
-  updateHUD();
+  clearParticles();
 }
 
 // ═══════════════════════════════════════════════
@@ -795,16 +801,17 @@ renderer.setAnimationLoop(time => {
     ctrl[0].getWorldPosition(ctrlWorldPos);
     const ctrlRight = new THREE.Vector3( 1, 0, 0).applyQuaternion(ctrlQ);
     const ctrlFwd   = new THREE.Vector3( 0, 0,-1).applyQuaternion(ctrlQ);
-    // Gun readout: right side, same forward depth as barrel
+    const labelOffset = new THREE.Vector3(0, 0.06, 0); // same vertical for both
+    // Gun readout: right side
     gunLabelSprite.position.copy(ctrlWorldPos)
       .addScaledVector(ctrlRight,  0.20)
       .addScaledVector(ctrlFwd,    0.10)
-      .add(new THREE.Vector3(0, 0.04, 0));
-    // Snap label: left side, same forward depth
+      .add(labelOffset);
+    // Snap label: left side, identical vertical
     snapLabelSprite.position.copy(ctrlWorldPos)
       .addScaledVector(ctrlRight, -0.26)
       .addScaledVector(ctrlFwd,    0.10)
-      .add(new THREE.Vector3(0, 0.04, 0));
+      .add(labelOffset);
     gunLabelSprite.visible = true;
   } else {
     gunLabelSprite.visible = false;
