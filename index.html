@@ -106,7 +106,7 @@ const CHARGE_MAG  = 1.0;
 const MAX_PART    = 25;
 const TRAIL_LEN   = 150;
 const PART_LIFE   = 22;    // seconds
-const SNAP_DEG    = 2.0;   // snap threshold in degrees
+const SNAP_DEG    = 5.0;   // snap threshold in degrees
 const FLICK_HI    = 0.70;  // joystick threshold to register flick
 const FLICK_LO    = 0.25;  // joystick dead zone centre
 
@@ -261,16 +261,19 @@ function changeB(delta) {
   bValue = parseFloat(Math.max(-5, Math.min(5, bValue + delta)).toFixed(2));
   rebuildArrows();
   updateHUD();
+  updateGunLabel();
 }
 
 function changeSpeed(delta) {
   launchSpd = parseFloat(Math.max(0, Math.min(5, launchSpd + delta)).toFixed(2));
   updateHUD();
+  updateGunLabel();
 }
 
 function toggleCharge() {
   chargeSign = -chargeSign;
   updateHUD();
+  updateGunLabel();
 }
 
 function toggleFieldMode() {
@@ -464,6 +467,104 @@ function buildLauncher() {
   return g;
 }
 
+// ── Haptic pulse ──
+function hapticPulse(intensity = 0.6, duration = 60) {
+  const session = renderer.xr.getSession();
+  if (!session) return;
+  for (const src of session.inputSources) {
+    if (src.handedness !== 'right') continue;
+    const act = src.gamepad?.hapticActuators;
+    if (act && act[0]) act[0].pulse(intensity, duration);
+  }
+}
+
+// ── Gun readout label (canvas sprite, always faces camera) ──
+const gunLabelCanvas = document.createElement('canvas');
+gunLabelCanvas.width = 256; gunLabelCanvas.height = 96;
+const gunLabelCtx = gunLabelCanvas.getContext('2d');
+const gunLabelTex = new THREE.CanvasTexture(gunLabelCanvas);
+const gunLabelSprite = new THREE.Sprite(
+  new THREE.SpriteMaterial({ map: gunLabelTex, transparent: true, depthTest: false })
+);
+gunLabelSprite.scale.set(0.22, 0.083, 1);
+gunLabelSprite.position.set(0, 0.12, -0.12); // floats above gun
+scene.add(gunLabelSprite); // added to scene, positioned in render loop
+
+function updateGunLabel() {
+  const ctx = gunLabelCtx;
+  const W = gunLabelCanvas.width, H = gunLabelCanvas.height;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = 'rgba(3,9,22,0.88)';
+  roundRect(ctx, 0, 0, W, H, 10);
+  ctx.fill();
+  ctx.strokeStyle = '#00ffcc'; ctx.lineWidth = 1.5;
+  roundRect(ctx, 1, 1, W-2, H-2, 9);
+  ctx.stroke();
+
+  ctx.font = '500 22px "Share Tech Mono", monospace';
+  const bSign = bValue >= 0 ? '+' : '−';
+  ctx.fillStyle = '#ffaa00';
+  ctx.fillText(`B  ${bSign}${Math.abs(bValue).toFixed(1)} T`, 14, 34);
+  ctx.fillStyle = '#00ffcc';
+  ctx.fillText(`v  ${launchSpd.toFixed(1)} m/s`, 14, 62);
+
+  // charge dot
+  ctx.fillStyle = chargeSign > 0 ? '#ff4455' : '#4488ff';
+  ctx.beginPath(); ctx.arc(W - 22, 30, 9, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 16px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(chargeSign > 0 ? '+' : '−', W - 22, 31);
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+
+  gunLabelTex.needsUpdate = true;
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+updateGunLabel();
+
+// ── Snap alignment label (appears when in snap zone) ──
+const snapLabelCanvas = document.createElement('canvas');
+snapLabelCanvas.width = 420; snapLabelCanvas.height = 72;
+const snapLabelCtx = snapLabelCanvas.getContext('2d');
+const snapLabelTex = new THREE.CanvasTexture(snapLabelCanvas);
+const snapLabelSprite = new THREE.Sprite(
+  new THREE.SpriteMaterial({ map: snapLabelTex, transparent: true, depthTest: false })
+);
+snapLabelSprite.scale.set(0.38, 0.065, 1);
+snapLabelSprite.position.set(0, 0.22, -0.12);
+snapLabelSprite.visible = false;
+scene.add(snapLabelSprite);
+
+function updateSnapLabel() {
+  const ctx = snapLabelCtx;
+  const W = snapLabelCanvas.width, H = snapLabelCanvas.height;
+  ctx.clearRect(0, 0, W, H);
+  if (snapMode === 'free') { snapLabelTex.needsUpdate = true; return; }
+
+  const isPerp = snapMode === 'perp';
+  const col    = isPerp ? '#00ffcc' : '#ffaa00';
+  const text   = isPerp ? '⊥  PERPENDICULAR TO FIELD' : '∥  PARALLEL TO FIELD';
+
+  ctx.fillStyle = 'rgba(3,9,22,0.92)';
+  roundRect(ctx, 0, 0, W, H, 8); ctx.fill();
+  ctx.strokeStyle = col; ctx.lineWidth = 1.5;
+  roundRect(ctx, 1, 1, W-2, H-2, 7); ctx.stroke();
+
+  ctx.fillStyle = col;
+  ctx.font = 'bold 26px "Share Tech Mono", monospace';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(text, W / 2, H / 2);
+  snapLabelTex.needsUpdate = true;
+}
+
 const launcher = buildLauncher();
 ctrl[0].add(launcher);
 const handle = new THREE.Mesh(
@@ -642,7 +743,7 @@ renderer.setAnimationLoop(time => {
   const dt = Math.min((time - lastTime) / 1000, 0.033);
   lastTime = time;
 
-  // Controller velocity tracking
+  // Controller velocity tracking + per-frame snap + label positioning
   if (renderer.xr.isPresenting) {
     for (let i = 0; i < 2; i++) {
       const curr = new THREE.Vector3();
@@ -651,6 +752,31 @@ renderer.setAnimationLoop(time => {
       ctrlPos[i].copy(curr);
     }
     pollGamepad();
+
+    // Per-frame snap evaluation against live right controller orientation
+    const ctrlQ   = new THREE.Quaternion();
+    ctrl[0].getWorldQuaternion(ctrlQ);
+    const rawFwd  = new THREE.Vector3(0, 0, -1).applyQuaternion(ctrlQ);
+    const prevSnap = snapMode;
+    snapLaunchDir(rawFwd);
+    if (snapMode !== prevSnap) {
+      // Entered or left a snap zone — haptic + label update
+      if (snapMode !== 'free') hapticPulse(0.55, 55);
+      updateSnapLabel();
+      const dot = launcher.getObjectByName('snapDot');
+      if (dot) dot.material.color.setHex(snapMode === 'perp' ? C.cyan : snapMode === 'par' ? C.amber : 0x1a3040);
+    }
+    snapLabelSprite.visible = (snapMode !== 'free');
+
+    // Position labels in world space above right controller
+    const ctrlWorldPos = new THREE.Vector3();
+    ctrl[0].getWorldPosition(ctrlWorldPos);
+    gunLabelSprite.position.copy(ctrlWorldPos).add(new THREE.Vector3(0, 0.15, 0));
+    snapLabelSprite.position.copy(ctrlWorldPos).add(new THREE.Vector3(0, 0.26, 0));
+    gunLabelSprite.visible = true;
+  } else {
+    gunLabelSprite.visible = false;
+    snapLabelSprite.visible = false;
   }
 
   // Particle physics (runs even for v=0 particles — they just don't move)
