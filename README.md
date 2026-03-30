@@ -6,7 +6,7 @@ Designed and developed by Anthony Danese, high school physics teacher.
 
 ## What it does
 
-Students fire charged particles into a configurable magnetic field and observe the resulting trajectories in real time. The simulation demonstrates how field direction, field strength, and particle speed affect the radius and direction of circular motion. A density-scaled arrow grid visualizes the magnetic field throughout the scene.
+Students fire charged particles into a configurable magnetic field and observe the resulting trajectories in real time. The simulation demonstrates how field direction, field strength, and particle speed and mass affect the radius and direction of circular motion. A density-scaled arrow grid visualizes the magnetic field throughout the scene.
 
 ## Features
 
@@ -22,21 +22,18 @@ Students fire charged particles into a configurable magnetic field and observe t
 | Action | Control |
 |---|---|
 | Fire particle | Trigger (right controller) |
-| Increase field strength | Right thumbstick up |
-| Decrease field strength | Right thumbstick down |
-| Increase particle speed | Left thumbstick up |
-| Decrease particle speed | Left thumbstick down |
-| Toggle charge sign | A button (right controller) |
-| Reset scene | B button (right controller) |
-| Spin scene | Grip button + move controller |
-| Walk / strafe | Left thumbstick |
+| Increase field strength | Thumbstick up |
+| Decrease field strength | Thumbstick down |
+| Increase particle speed | Thumbstick right |
+| Decrease particle speed | Thumbstick left |
+| Toggle charge sign | A button (right controller) | |
 
 ## How to use
 
 1. Open your Meta Quest browser and navigate to the live sim
 2. Tap **Enter VR**
 3. Use the trigger to fire particles into the field
-4. Adjust field strength and particle speed with the thumbsticks
+4. Adjust field strength and particle speed with the thumbstick
 5. Observe how trajectory radius changes with each parameter
 
 **Live sim:** https://phys-viz.github.io/MagneticForceVR/
