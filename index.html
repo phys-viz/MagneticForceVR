@@ -58,10 +58,10 @@
 </head>
 <body>
 
-<!-- ── DESKTOP HUD ── -->
+<!-- DESKTOP HUD -->
 <div id="hud">
   <div class="hud-title">MAGNETIC FORCE VR</div>
-  <div class="hud-sub">AP PHYSICS C · LORENTZ FORCE LAB</div>
+  <div class="hud-sub">AP PHYSICS C | LORENTZ FORCE LAB</div>
   <div class="row"><span class="lbl">B FIELD &nbsp;</span><span class="val-b"   id="b-out">0.0 T</span></div>
   <div class="row"><span class="lbl">AXIS &nbsp;&nbsp;&nbsp;</span><span class="val"    id="ax-out">+Z</span></div>
   <div class="row"><span class="lbl">SPEED &nbsp;&nbsp;</span><span class="val-spd" id="v-out">0.0 m/s</span></div>
@@ -72,30 +72,30 @@
   <div class="row"><span class="lbl">PARTICLES </span><span class="val" id="p-out">0</span></div>
 </div>
 
-<!-- ── DESKTOP CONTROL CARD ── -->
+<!-- DESKTOP CONTROL CARD -->
 <div id="ctrl-card">
   <span>INDEX TRIGGER</span> fire<br>
-  <span>JOY ↑↓</span> B field ±0.5 T<br>
-  <span>JOY ←→</span> speed ±0.5 m/s<br>
+  <span>JOY UP/DOWN</span> B field +/-0.5 T<br>
+  <span>JOY LEFT/RIGHT</span> speed +/-0.5 m/s<br>
   <span>A</span> toggle charge<br>
-  <span>B</span> rotate field 90°<br>
-  ──────────────<br>
-  <span>SPACE</span> fire &nbsp; <span>↑↓</span> B &nbsp; <span>←→</span> speed<br>
+  <span>B</span> rotate field 90 deg<br>
+  ----------------<br>
+  <span>SPACE</span> fire &nbsp; <span>UP/DOWN</span> B &nbsp; <span>LEFT/RIGHT</span> speed<br>
   <span>A/B keys</span> charge / field &nbsp; <span>drag</span> orbit
 </div>
 
-<button id="vr-btn">CHECKING VR…</button>
+<button id="vr-btn">CHECKING VR...</button>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
-// Visible error reporter — shows any crash on screen
+// Visible error reporter; shows any crash on screen
 window.onerror = (msg, src, line) => {
   const d = document.createElement('div');
   d.style.cssText = 'position:fixed;top:0;left:0;width:100%;background:#ff0033;color:#fff;font:13px monospace;padding:8px 12px;z-index:9999;';
   d.textContent = `JS ERROR line ${line}: ${msg}`;
   document.body.appendChild(d);
   const btn = document.getElementById('vr-btn');
-  if (btn) { btn.textContent = 'SCRIPT ERROR — SEE TOP'; btn.disabled = true; }
+  if (btn) { btn.textContent = 'SCRIPT ERROR - SEE TOP'; btn.disabled = true; }
 };
 
 
@@ -149,6 +149,25 @@ function getBDir() {
   const v = getB(), l = v.length();
   return l > 0.001 ? v.clone().divideScalar(l) : new THREE.Vector3(0, 0, 1);
 }
+
+const _tmpB = new THREE.Vector3();
+const _tmpBDir = new THREE.Vector3();
+const _tmpCross = new THREE.Vector3();
+const _tmpForce = new THREE.Vector3();
+const _tmpProj = new THREE.Vector3();
+const _tmpForward = new THREE.Vector3();
+const _tmpCtrlPos = new THREE.Vector3();
+const _tmpCtrlQuat = new THREE.Quaternion();
+const _tmpCtrlRight = new THREE.Vector3();
+const _tmpCtrlForward = new THREE.Vector3();
+const _tmpDesktopMuzzle = new THREE.Vector3();
+const _tmpHelpHeadPos = new THREE.Vector3();
+const _tmpHelpHeadQuat = new THREE.Quaternion();
+const _tmpHelpHeadScale = new THREE.Vector3();
+const _tmpHelpForward = new THREE.Vector3();
+const _labelOffset = new THREE.Vector3(0, 0.06, 0);
+const _launchPos = new THREE.Vector3();
+const _launchQuat = new THREE.Quaternion();
 
 // ═══════════════════════════════════════════════
 // RENDERER
@@ -311,7 +330,7 @@ function makeChargeSprite(sign) {
   ctx.fillStyle = '#ffffff';
   ctx.font = 'bold 54px monospace';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(sign > 0 ? '+' : '−', 32, 34);
+  ctx.fillText(sign > 0 ? '+' : '-', 32, 34);
   return new THREE.CanvasTexture(cnv);
 }
 
@@ -362,8 +381,8 @@ function spawnParticle(pos, vel, sign) {
 }
 
 function stepParticle(p, dt) {
-  const B   = getB();
-  const vxB = new THREE.Vector3().crossVectors(p.vel, B);
+  const B   = _tmpB.set(0, fieldMode === 'Y' ? bValue : 0, fieldMode === 'Z' ? bValue : 0);
+  const vxB = _tmpCross.crossVectors(p.vel, B);
   vxB.multiplyScalar(p.sign * CHARGE_MAG / p.mass);
   p.vel.addScaledVector(vxB, dt);
   p.pos.addScaledVector(p.vel, dt);
@@ -383,7 +402,7 @@ function stepParticle(p, dt) {
   p.trailGeo.setDrawRange(0, p.history.length);
 
   // Force arrow
-  const F = new THREE.Vector3().crossVectors(p.vel, B).multiplyScalar(p.sign);
+  const F = _tmpForce.crossVectors(p.vel, B).multiplyScalar(p.sign);
   if (F.length() > 0.01 && p.vel.length() > 0.01) {
     p.forceArrow.position.copy(p.pos);
     p.forceArrow.setDirection(F.normalize());
@@ -408,11 +427,11 @@ function disposeParticle(p) {
 const DEG = Math.PI / 180;
 
 function snapLaunchDir(rawFwd) {
-  const B   = getB();
+  const B   = _tmpB.set(0, fieldMode === 'Y' ? bValue : 0, fieldMode === 'Z' ? bValue : 0);
   const mag = B.length();
   if (mag < 0.01) { snapMode = 'free'; return rawFwd.clone(); }
 
-  const Bhat  = B.clone().normalize();
+  const Bhat  = _tmpBDir.copy(B).normalize();
   const absDot = Math.abs(rawFwd.dot(Bhat));  // 1 = parallel, 0 = perpendicular
 
   if (absDot > 0.9) {
@@ -425,7 +444,7 @@ function snapLaunchDir(rawFwd) {
     // Within ~6° of perpendicular
     snapMode = 'perp';
     const dot = rawFwd.dot(Bhat);
-    const proj = rawFwd.clone().addScaledVector(Bhat, -dot);
+    const proj = _tmpProj.copy(rawFwd).addScaledVector(Bhat, -dot);
     return proj.lengthSq() > 1e-6 ? proj.normalize() : rawFwd.clone();
   }
   snapMode = 'free';
@@ -433,7 +452,7 @@ function snapLaunchDir(rawFwd) {
 }
 
 function fireFrom(worldPos, ctrlQuat) {
-  const rawFwd = new THREE.Vector3(0, 0, -1).applyQuaternion(ctrlQuat);
+  const rawFwd = _tmpForward.set(0, 0, -1).applyQuaternion(ctrlQuat);
   const dir    = snapLaunchDir(rawFwd);
   // launchSpd 0 is valid — particle sits still, demonstrating F=qv×B=0
   const vel = dir.multiplyScalar(launchSpd);
@@ -487,8 +506,18 @@ function hapticPulse(intensity = 0.6, duration = 60) {
   if (!session) return;
   for (const src of session.inputSources) {
     if (src.handedness !== 'right') continue;
-    const act = src.gamepad?.hapticActuators;
-    if (act && act[0]) act[0].pulse(intensity, duration);
+    if (!src.gamepad) continue;
+    const act = src.gamepad.hapticActuators;
+    if (act && act[0]) {
+      act[0].pulse(intensity, duration);
+    } else if (src.gamepad.vibrationActuator?.playEffect) {
+      src.gamepad.vibrationActuator.playEffect('dual-rumble', {
+        startDelay: 0,
+        duration,
+        weakMagnitude: intensity,
+        strongMagnitude: intensity
+      }).catch(() => {});
+    }
   }
 }
 
@@ -516,7 +545,7 @@ function updateGunLabel() {
   ctx.stroke();
 
   ctx.font = '500 22px "Share Tech Mono", monospace';
-  const bSign = bValue >= 0 ? '+' : '−';
+  const bSign = bValue >= 0 ? '+' : '-';
   ctx.fillStyle = '#ffaa00';
   ctx.fillText(`B  ${bSign}${Math.abs(bValue).toFixed(1)} T`, 14, 30);
   ctx.fillStyle = '#00ffcc';
@@ -529,7 +558,7 @@ function updateGunLabel() {
   ctx.beginPath(); ctx.arc(W - 22, 30, 9, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = '#fff';
   ctx.font = 'bold 16px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(chargeSign > 0 ? '+' : '−', W - 22, 31);
+  ctx.fillText(chargeSign > 0 ? '+' : '-', W - 22, 31);
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
 
   gunLabelTex.needsUpdate = true;
@@ -567,7 +596,7 @@ function updateSnapLabel() {
 
   const isPerp = snapMode === 'perp';
   const col    = isPerp ? '#00ffcc' : '#ffaa00';
-  const text   = isPerp ? '⊥  PERPENDICULAR TO FIELD' : '∥  PARALLEL TO FIELD';
+  const text   = isPerp ? 'PERPENDICULAR TO FIELD' : 'PARALLEL TO FIELD';
 
   ctx.fillStyle = 'rgba(3,9,22,0.92)';
   roundRect(ctx, 0, 0, W, H, 8); ctx.fill();
@@ -618,14 +647,12 @@ const handle = new THREE.Mesh(
 handle.rotation.x = -Math.PI / 2;
 ctrl[0].add(handle);
 
-// ── Index trigger (selectstart) = FIRE or dismiss help ──
+// Index trigger (selectstart) = fire or dismiss help
 ctrl[0].addEventListener('selectstart', () => {
   if (helpVisible) { hideHelp(); return; }
-  const pos = new THREE.Vector3();
-  const q   = new THREE.Quaternion();
-  muzzleChargeMesh.getWorldPosition(pos);
-  ctrl[0].getWorldQuaternion(q);
-  fireFrom(pos, q);
+  muzzleChargeMesh.getWorldPosition(_launchPos);
+  ctrl[0].getWorldQuaternion(_launchQuat);
+  fireFrom(_launchPos, _launchQuat);
 });
 
 
@@ -661,7 +688,7 @@ function drawHelpPanel(isIntro) {
   ctx.strokeStyle = '#062030'; ctx.lineWidth = 1;
   roundRect(ctx, 8, 8, W-16, H-16, 11); ctx.stroke();
 
-  // Title only — no subtitle
+  // Title only; no subtitle
   ctx.font = 'bold 36px Rajdhani, monospace';
   ctx.fillStyle = '#00ffcc';
   ctx.textAlign = 'center';
@@ -671,14 +698,14 @@ function drawHelpPanel(isIntro) {
   ctx.strokeStyle = '#0a1e2e'; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(24, 72); ctx.lineTo(W-24, 72); ctx.stroke();
 
-  // Controls table — arrows rendered large, other keys normal
+  // Controls table; arrows rendered large, other keys normal
   const rows = [
     ['INDEX TRIGGER', 'fire particle',        '#00ffcc', false],
-    ['JOY ↑ / ↓',    'B field  −5T → +5T',  '#ffaa00', true ],
-    ['JOY ← / →',    'speed  0 → 5 m/s',    '#ffaa00', true ],
-    ['THUMB CLICK',   'cycle mass  1 → 2',   '#aaddff', false],
-    ['A BUTTON',      'toggle charge  + / −', '#ff4455', false],
-    ['B BUTTON',      'rotate field 90°',     '#d0fff8', false],
+    ['JOY UP / DOWN', 'B field  -5T to +5T', '#ffaa00', false],
+    ['JOY LEFT / RIGHT', 'speed  0 to 5 m/s', '#ffaa00', false],
+    ['THUMB CLICK',   'cycle mass  1 to 2',   '#aaddff', false],
+    ['A BUTTON',      'toggle charge  + / -', '#ff4455', false],
+    ['B BUTTON',      'rotate field 90 deg',  '#d0fff8', false],
     ['GRIP',          'show / hide help',     '#d0fff8', false],
   ];
 
@@ -725,19 +752,17 @@ function showHelp(isIntro) {
   helpMesh.visible = true;
 
   // In XR, camera.matrixWorld contains the real head pose
-  const headPos = new THREE.Vector3();
-  const headQuat = new THREE.Quaternion();
-  camera.matrixWorld.decompose(headPos, headQuat, new THREE.Vector3());
+  camera.matrixWorld.decompose(_tmpHelpHeadPos, _tmpHelpHeadQuat, _tmpHelpHeadScale);
 
   // Place panel 1.4m ahead of head, at head height, facing the user
-  const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(headQuat);
+  const fwd = _tmpHelpForward.set(0, 0, -1).applyQuaternion(_tmpHelpHeadQuat);
   fwd.y = 0;
   if (fwd.lengthSq() < 0.001) fwd.set(0, 0, -1); // fallback if looking straight up/down
   fwd.normalize();
 
-  helpMesh.position.copy(headPos).addScaledVector(fwd, 1.4);
-  helpMesh.position.y = headPos.y; // keep at eye level
-  helpMesh.lookAt(headPos);
+  helpMesh.position.copy(_tmpHelpHeadPos).addScaledVector(fwd, 1.4);
+  helpMesh.position.y = _tmpHelpHeadPos.y; // keep at eye level
+  helpMesh.lookAt(_tmpHelpHeadPos);
 }
 
 function hideHelp() {
@@ -820,61 +845,118 @@ function pollGamepad() {
 }
 
 // VR lifecycle
+let introHelpTimer = null;
+
+function cancelIntroHelp() {
+  if (introHelpTimer !== null) {
+    clearTimeout(introHelpTimer);
+    introHelpTimer = null;
+  }
+}
+
 renderer.xr.addEventListener('sessionstart', () => {
   document.getElementById('hud').style.display      = 'none';
   document.getElementById('ctrl-card').style.display = 'none';
-  // Show intro on first entry — slight delay so camera pose is settled
-  setTimeout(() => showHelp(true), 600);
+  cancelIntroHelp();
+  // Show intro on first entry after camera pose settles.
+  introHelpTimer = setTimeout(() => {
+    introHelpTimer = null;
+    if (renderer.xr.isPresenting) showHelp(true);
+  }, 600);
 });
 renderer.xr.addEventListener('sessionend', () => {
+  cancelIntroHelp();
   document.getElementById('hud').style.display      = '';
   document.getElementById('ctrl-card').style.display = '';
   hideHelp();
+  joy.yNeutral = true;
+  joy.xNeutral = true;
+  joy.aPrev = false;
+  joy.bPrev = false;
+  joy.clickPrev = false;
+  joy.gripPrev = false;
 });
 
 // ═══════════════════════════════════════════════
 // VR BUTTON
 // ═══════════════════════════════════════════════
 const vrBtn = document.getElementById('vr-btn');
+function setVrButtonState(label, disabled = false) {
+  vrBtn.textContent = label;
+  vrBtn.disabled = disabled;
+}
+
 (async () => {
-  if (!('xr' in navigator)) { vrBtn.textContent = 'WEBXR NOT FOUND'; vrBtn.disabled = true; return; }
+  if (!('xr' in navigator)) { setVrButtonState('WEBXR NOT FOUND', true); return; }
   try {
     const ok = await navigator.xr.isSessionSupported('immersive-vr');
-    if (!ok) { vrBtn.textContent = 'VR NOT SUPPORTED'; vrBtn.disabled = true; return; }
-    vrBtn.textContent = 'ENTER VR';
+    if (!ok) { setVrButtonState('VR NOT SUPPORTED', true); return; }
+    setVrButtonState('ENTER VR');
     vrBtn.addEventListener('click', async () => {
       if (!xrSession) {
-        xrSession = await navigator.xr.requestSession('immersive-vr', {
+        setVrButtonState('STARTING VR...', true);
+        const session = await navigator.xr.requestSession('immersive-vr', {
           optionalFeatures: ['local-floor', 'bounded-floor'],
+        }).catch(err => {
+          console.error('Failed to start VR session:', err);
+          return null;
         });
+        if (!session) {
+          setVrButtonState('ENTER VR');
+          return;
+        }
+        xrSession = session;
         await renderer.xr.setSession(xrSession);
-        vrBtn.textContent = 'EXIT VR';
+        setVrButtonState('EXIT VR');
         xrSession.addEventListener('end', () => {
           xrSession = null;
-          vrBtn.textContent = 'ENTER VR';
+          setVrButtonState('ENTER VR');
         });
       } else {
-        xrSession.end();
+        xrSession.end().catch(err => {
+          console.error('Failed to end VR session:', err);
+          setVrButtonState('EXIT VR');
+        });
       }
     });
-  } catch { vrBtn.textContent = 'VR ERROR'; vrBtn.disabled = true; }
+  } catch (err) {
+    console.error('VR initialization failed:', err);
+    setVrButtonState('VR ERROR', true);
+  }
 })();
 
 // ═══════════════════════════════════════════════
 // DESKTOP ORBIT + KEYBOARD
 // ═══════════════════════════════════════════════
 const orbit = { theta: 0, phi: 0.28, r: 7, drag: false, lx: 0, ly: 0 };
+renderer.domElement.style.touchAction = 'none';
 
-renderer.domElement.addEventListener('mousedown', e => {
-  orbit.drag = true; orbit.lx = e.clientX; orbit.ly = e.clientY;
+renderer.domElement.addEventListener('pointerdown', e => {
+  if (renderer.xr.isPresenting) return;
+  orbit.drag = true;
+  orbit.lx = e.clientX;
+  orbit.ly = e.clientY;
+  renderer.domElement.setPointerCapture(e.pointerId);
 });
-window.addEventListener('mouseup', () => { orbit.drag = false; });
-window.addEventListener('mousemove', e => {
+renderer.domElement.addEventListener('pointermove', e => {
   if (!orbit.drag || renderer.xr.isPresenting) return;
   orbit.theta -= (e.clientX - orbit.lx) * 0.007;
   orbit.phi   -= (e.clientY - orbit.ly) * 0.007;
   orbit.phi    = Math.max(0.04, Math.min(Math.PI * 0.44, orbit.phi));
-  orbit.lx = e.clientX; orbit.ly = e.clientY;
+  orbit.lx = e.clientX;
+  orbit.ly = e.clientY;
+});
+renderer.domElement.addEventListener('pointerup', e => {
+  orbit.drag = false;
+  if (renderer.domElement.hasPointerCapture(e.pointerId)) {
+    renderer.domElement.releasePointerCapture(e.pointerId);
+  }
+});
+renderer.domElement.addEventListener('pointercancel', e => {
+  orbit.drag = false;
+  if (renderer.domElement.hasPointerCapture(e.pointerId)) {
+    renderer.domElement.releasePointerCapture(e.pointerId);
+  }
 });
 window.addEventListener('wheel', e => {
   if (renderer.xr.isPresenting) return;
@@ -893,10 +975,10 @@ window.addEventListener('keydown', e => {
     case 'm': case 'M': cycleMass();     break;
     case ' ':
       e.preventDefault();
-      const muzzle = camera.position.clone().addScaledVector(
-        new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion), 0.5
+      _tmpDesktopMuzzle.copy(camera.position).addScaledVector(
+        _tmpForward.set(0, 0, -1).applyQuaternion(camera.quaternion), 0.5
       );
-      fireFrom(muzzle, camera.quaternion);
+      fireFrom(_tmpDesktopMuzzle, camera.quaternion);
       break;
   }
 });
@@ -905,15 +987,15 @@ window.addEventListener('keydown', e => {
 // HUD
 // ═══════════════════════════════════════════════
 function updateHUD() {
-  const bSign = bValue >= 0 ? '+' : '−';
+  const bSign = bValue >= 0 ? '+' : '-';
   document.getElementById('b-out').textContent  = `${bSign}${Math.abs(bValue).toFixed(1)} T`;
-  const axis = fieldMode === 'Z' ? (bValue >= 0 ? '+Z' : '−Z') : (bValue >= 0 ? '+Y' : '−Y');
+  const axis = fieldMode === 'Z' ? (bValue >= 0 ? '+Z' : '-Z') : (bValue >= 0 ? '+Y' : '-Y');
   document.getElementById('ax-out').textContent = axis;
   document.getElementById('v-out').textContent  = `${launchSpd.toFixed(1)} m/s`;
   document.getElementById('m-out').textContent  = `${currentMass().toFixed(1)}`;
 
   const qEl = document.getElementById('q-out');
-  qEl.textContent = chargeSign > 0 ? '+1e' : '−1e';
+  qEl.textContent = chargeSign > 0 ? '+1e' : '-1e';
   qEl.className   = chargeSign > 0 ? 'val-pos' : 'val-neg';
 
   const sEl = document.getElementById('sn-out');
@@ -934,21 +1016,19 @@ renderer.setAnimationLoop(time => {
   // Controller velocity tracking + per-frame snap + label positioning
   if (renderer.xr.isPresenting) {
     for (let i = 0; i < 2; i++) {
-      const curr = new THREE.Vector3();
-      ctrl[i].getWorldPosition(curr);
-      if (dt > 0.001) ctrlVel[i].subVectors(curr, ctrlPos[i]).divideScalar(dt);
-      ctrlPos[i].copy(curr);
+      ctrl[i].getWorldPosition(_tmpCtrlPos);
+      if (dt > 0.001) ctrlVel[i].subVectors(_tmpCtrlPos, ctrlPos[i]).divideScalar(dt);
+      ctrlPos[i].copy(_tmpCtrlPos);
     }
     pollGamepad();
 
     // Per-frame snap evaluation against live right controller orientation
-    const ctrlQ   = new THREE.Quaternion();
-    ctrl[0].getWorldQuaternion(ctrlQ);
-    const rawFwd  = new THREE.Vector3(0, 0, -1).applyQuaternion(ctrlQ);
+    ctrl[0].getWorldQuaternion(_tmpCtrlQuat);
+    const rawFwd  = _tmpForward.set(0, 0, -1).applyQuaternion(_tmpCtrlQuat);
     const prevSnap = snapMode;
     snapLaunchDir(rawFwd);
     if (snapMode !== prevSnap) {
-      // Entered or left a snap zone — haptic + label update
+      // Entered or left a snap zone; haptic + label update
       if (snapMode !== 'free') hapticPulse(0.55, 55);
       updateSnapLabel();
       const dot = launcher.getObjectByName('snapDot');
@@ -957,21 +1037,20 @@ renderer.setAnimationLoop(time => {
     snapLabelSprite.visible = (snapMode !== 'free');
 
     // Position labels to sides of right controller using its local axes
-    const ctrlWorldPos = new THREE.Vector3();
-    ctrl[0].getWorldPosition(ctrlWorldPos);
-    const ctrlRight = new THREE.Vector3( 1, 0, 0).applyQuaternion(ctrlQ);
-    const ctrlFwd   = new THREE.Vector3( 0, 0,-1).applyQuaternion(ctrlQ);
-    const labelOffset = new THREE.Vector3(0, 0.06, 0); // same vertical for both
+    ctrl[0].getWorldPosition(_tmpCtrlPos);
+    const ctrlRight = _tmpCtrlRight.set(1, 0, 0).applyQuaternion(_tmpCtrlQuat);
+    const ctrlFwd   = _tmpCtrlForward.set(0, 0, -1).applyQuaternion(_tmpCtrlQuat);
+    // same vertical for both
     // Gun readout: right side
-    gunLabelSprite.position.copy(ctrlWorldPos)
+    gunLabelSprite.position.copy(_tmpCtrlPos)
       .addScaledVector(ctrlRight,  0.20)
       .addScaledVector(ctrlFwd,    0.10)
-      .add(labelOffset);
+      .add(_labelOffset);
     // Snap label: left side, identical vertical
-    snapLabelSprite.position.copy(ctrlWorldPos)
+    snapLabelSprite.position.copy(_tmpCtrlPos)
       .addScaledVector(ctrlRight, -0.26)
       .addScaledVector(ctrlFwd,    0.10)
-      .add(labelOffset);
+      .add(_labelOffset);
     gunLabelSprite.visible = true;
   } else {
     gunLabelSprite.visible = false;
@@ -991,7 +1070,7 @@ renderer.setAnimationLoop(time => {
 
   // Desktop snap preview + camera orbit
   if (!renderer.xr.isPresenting) {
-    const rawFwd  = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+    const rawFwd  = _tmpForward.set(0, 0, -1).applyQuaternion(camera.quaternion);
     const prevSnap = snapMode;
     snapLaunchDir(rawFwd);
     if (snapMode !== prevSnap) updateHUD();
